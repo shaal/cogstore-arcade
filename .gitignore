@@ -1,0 +1,6 @@
+# Never commit the signing key or build outputs.
+*.key
+key.hex
+/public/
+/staged/
+fd.zip

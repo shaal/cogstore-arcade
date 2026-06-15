@@ -1,0 +1,71 @@
+name: Publish store
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: read, pages: write, id-token: write }
+concurrency: { group: pages, cancel-in-progress: true }
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: "${{ steps.deploy.outputs.page_url }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Fail fast with a clear message if the signing key secret isn't set yet.
+      - name: Require signing key
+        env:
+          STORE_SIGNING_KEY: "${{ secrets.STORE_SIGNING_KEY }}"
+        run: |
+          if [ -z "$STORE_SIGNING_KEY" ]; then
+            echo "::error::Set the STORE_SIGNING_KEY repo secret (Settings → Secrets and variables → Actions). See README."
+            exit 1
+          fi
+
+      - name: Build the gearbox publishing tool
+        run: |
+          git clone --depth 1 https://github.com/shaal/gearbox /tmp/gearbox
+          cargo build --release --manifest-path /tmp/gearbox/crates/gearbox/Cargo.toml
+          echo "GEARBOX=/tmp/gearbox/crates/gearbox/target/release/gearbox" >> "$GITHUB_ENV"
+
+      - name: Build the doom ARM binary
+        # Cog source is upstream. Switch to cognitum-one/cogs@main once PR #28 merges.
+        env:
+          COG_REPO: https://github.com/shaal/cogs
+          COG_REF: add-doom-cog
+        run: |
+          git clone --depth 1 -b "$COG_REF" "$COG_REPO" /tmp/cogs
+          mkdir -p "$GITHUB_WORKSPACE/staged/cogs/arm/wads"
+          docker build -t cog-doom-arm -f /tmp/cogs/src/cogs/doom/Dockerfile /tmp/cogs/src/cogs/doom
+          cid=$(docker create cog-doom-arm)
+          docker cp "$cid:/cog-doom-arm" "$GITHUB_WORKSPACE/staged/cogs/arm/cog-doom-arm"   # FROM scratch image: binary is at /cog-doom-arm
+          docker rm "$cid"
+
+      - name: Fetch FreeDoom WAD (the cog ships no game data)
+        run: |
+          curl -L -o fd.zip https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip
+          unzip -j fd.zip '*/freedoom1.wad' -d "$GITHUB_WORKSPACE/staged/cogs/arm/wads"
+
+      - name: Sign + stage the store
+        env:
+          STORE_SIGNING_KEY: "${{ secrets.STORE_SIGNING_KEY }}"
+        run: |
+          printf '%s' "$STORE_SIGNING_KEY" > "$RUNNER_TEMP/key.hex"
+          /tmp/gearbox/examples/publish-store.sh \
+            --store-id shaal-arcade --name "Shaal Arcade — games for Cognitum" \
+            --base-url https://arcade.shaal.dev --key-id shaal-arcade-2026 \
+            --seed-file "$RUNNER_TEMP/key.hex" \
+            --cogs-dir "$GITHUB_WORKSPACE/manifests" \
+            --artifacts-dir "$GITHUB_WORKSPACE/staged" \
+            --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --out "$GITHUB_WORKSPACE/public" --attest
+          rm -f "$RUNNER_TEMP/key.hex"
+          echo arcade.shaal.dev > "$GITHUB_WORKSPACE/public/CNAME"
+
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: public }
+      - id: deploy
+        uses: actions/deploy-pages@v4
