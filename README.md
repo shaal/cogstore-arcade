@@ -14,7 +14,7 @@ None of this depends on the upstream PR (`cognitum-one/cogs#28`) being accepted.
 | **store_id** | `shaal-arcade` (cogs install as `shaal-arcade/<cog>`) |
 | **catalog** | https://arcade.shaal.dev/app-registry.json |
 | **signing key id** | `shaal-arcade-2026` |
-| **key fingerprint** | _(printed on first publish — paste it here so users can confirm it on add-store / TOFU)_ |
+| **key fingerprint** | `3a5479e78741cd4e41f0988d90ba780bd9b38bbf7412fe00612a264b63c60c11` |
 
 ## What's here
 
