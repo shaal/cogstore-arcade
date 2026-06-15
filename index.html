@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shaal Arcade — games for Cognitum</title>
+<style>
+  :root{
+    --bg:#0e0b0d; --panel:#1a1416; --ink:#f3e9e4; --dim:#a99a92;
+    --accent:#e0301e; --accent2:#ffb000; --line:#2c2226; --ok:#46c06a;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 500px at 50% -10%,#241317 0,var(--bg) 60%);
+    color:var(--ink);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:880px;margin:0 auto;padding:48px 20px 80px}
+  header{text-align:center;margin-bottom:8px}
+  .logo{font-size:46px;letter-spacing:.5px;margin:0;font-weight:800}
+  .logo .a{color:var(--accent)} .logo .b{color:var(--accent2)}
+  .tag{color:var(--dim);margin:.3em 0 0}
+  .pill{display:inline-block;font:600 12px/1 var(--mono);color:var(--accent2);
+    border:1px solid var(--line);border-radius:999px;padding:6px 11px;margin-top:14px}
+  h2{font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+    margin:40px 0 14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card h3{margin:0 0 2px;font-size:19px}
+  .card .meta{color:var(--dim);font:600 12px/1 var(--mono);margin-bottom:10px}
+  .card p{margin:0;color:#cdbfb8;font-size:14px}
+  .card .foot{margin-top:12px;color:var(--dim);font:12px/1 var(--mono);display:flex;gap:14px;flex-wrap:wrap}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;font-size:14px}
+  .kv div:nth-child(odd){color:var(--dim)}
+  code,.mono{font-family:var(--mono);font-size:12.5px;word-break:break-all}
+  .fp{color:var(--ok)}
+  pre{background:#0c0a0b;border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;
+    font-family:var(--mono);font-size:12px;color:#cdbfb8;margin:12px 0 0}
+  .muted{color:var(--dim);font-size:13px}
+  footer{margin-top:48px;text-align:center;color:var(--dim);font-size:13px}
+  .err{color:var(--accent);font-family:var(--mono);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="logo">🕹 <span class="a">SHAAL</span> <span class="b">ARCADE</span></h1>
+    <p class="tag">A games cog store for <strong>Cognitum</strong> — self-hosted &amp; signed.</p>
+    <span class="pill" id="storeId">shaal-arcade</span>
+  </header>
+
+  <h2>Games</h2>
+  <div class="grid" id="cogs"><p class="muted">Loading catalog…</p></div>
+
+  <h2>Add this store to your Cognitum Seed</h2>
+  <div class="box">
+    <div class="kv">
+      <div>Store URL</div><div class="mono" id="catalogUrl">—</div>
+      <div>Key id</div><div class="mono" id="keyId">—</div>
+      <div>Fingerprint</div><div class="mono fp" id="fp">computing…</div>
+    </div>
+    <p class="muted" style="margin:14px 0 0">On <em>add store</em>, your Seed shows this fingerprint — confirm it matches
+      (trust-on-first-use). Then cogs install as <code>shaal-arcade/&lt;cog&gt;</code>.</p>
+    <pre id="descriptor">…</pre>
+  </div>
+
+  <footer>
+    Signed with <a href="https://github.com/shaal/gearbox">gearbox</a> ·
+    <a href="store.json">store.json</a> · <a href="app-registry.json">app-registry.json</a> ·
+    source: <a href="https://github.com/shaal/cog-doom">cog-doom</a> (GPL-2.0)
+  </footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtBytes = n => n >= 1<<20 ? (n/1048576).toFixed(1)+' MB' : (n/1024).toFixed(0)+' KB';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function sha256hex(bytes){
+  const d = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+(async () => {
+  try {
+    const [store, cat] = await Promise.all([
+      fetch('store.json').then(r=>r.json()),
+      fetch('app-registry.json').then(r=>r.json()),
+    ]);
+
+    $('storeId').textContent = store.store_id || 'shaal-arcade';
+    $('catalogUrl').textContent = store.catalog_url || location.origin + '/app-registry.json';
+    const key = (store.keys || [])[0] || {};
+    $('keyId').textContent = key.key_id || '—';
+
+    // fingerprint = sha256 of the raw 32-byte public key (protocol §7.3)
+    if (key.pubkey_b64) {
+      const raw = Uint8Array.from(atob(key.pubkey_b64), c => c.charCodeAt(0));
+      $('fp').textContent = await sha256hex(raw);
+    }
+
+    const base = (store.catalog_url || '').replace(/\/app-registry\.json$/, '') || location.origin;
+    $('descriptor').textContent = JSON.stringify({
+      id: store.store_id, name: store.name,
+      catalog_url: store.catalog_url, artifact_base: base,
+      trust: [key.key_id], priority: 100, enabled: true
+    }, null, 2);
+
+    const cogs = cat.cogs || [];
+    $('cogs').innerHTML = cogs.map(c => {
+      const v = (c.versions || [])[0] || {};
+      const m = (v.manifest && v.manifest.cog) || {};
+      const a = v.artifacts || {};
+      const size = (a.binary && a.binary.size) || 0;
+      const assets = (a.assets || []).length;
+      return `<div class="card">
+        <h3>${esc(m.name || c.id)}</h3>
+        <div class="meta">${esc(c.id)} · v${esc(v.version || '?')} · ${esc(m.category || 'cog')}</div>
+        <p>${esc(m.description || '')}</p>
+        <div class="foot"><span>⤓ ${fmtBytes(size)}</span>${assets?`<span>📦 ${assets} asset${assets>1?'s':''}</span>`:''}<span>⛨ signed</span></div>
+      </div>`;
+    }).join('') || '<p class="muted">No cogs published yet.</p>';
+  } catch (e) {
+    $('cogs').innerHTML = '<p class="err">Could not load the catalog: ' + esc(e.message) + '</p>';
+  }
+})();
+</script>
+</body>
+</html>
