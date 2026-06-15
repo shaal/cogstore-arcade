@@ -31,15 +31,10 @@ jobs:
           cargo build --release --manifest-path /tmp/gearbox/crates/gearbox/Cargo.toml
           echo "GEARBOX=/tmp/gearbox/crates/gearbox/target/release/gearbox" >> "$GITHUB_ENV"
 
-      - name: Build the doom ARM binary
-        # Cog source is upstream. Switch to cognitum-one/cogs@main once PR #28 merges.
-        env:
-          COG_REPO: https://github.com/shaal/cogs
-          COG_REF: add-doom-cog
+      - name: Build the doom ARM binary (vendored source — fully self-contained)
         run: |
-          git clone --depth 1 -b "$COG_REF" "$COG_REPO" /tmp/cogs
           mkdir -p "$GITHUB_WORKSPACE/staged/cogs/arm/wads"
-          docker build -t cog-doom-arm -f /tmp/cogs/src/cogs/doom/Dockerfile /tmp/cogs/src/cogs/doom
+          docker build -t cog-doom-arm -f cog/doom/Dockerfile cog/doom
           cid=$(docker create cog-doom-arm)
           docker cp "$cid:/cog-doom-arm" "$GITHUB_WORKSPACE/staged/cogs/arm/cog-doom-arm"   # FROM scratch image: binary is at /cog-doom-arm
           docker rm "$cid"
@@ -58,7 +53,7 @@ jobs:
             --store-id shaal-arcade --name "Shaal Arcade — games for Cognitum" \
             --base-url https://arcade.shaal.dev --key-id shaal-arcade-2026 \
             --seed-file "$RUNNER_TEMP/key.hex" \
-            --cogs-dir "$GITHUB_WORKSPACE/manifests" \
+            --cogs-dir "$GITHUB_WORKSPACE/cog" \
             --artifacts-dir "$GITHUB_WORKSPACE/staged" \
             --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --out "$GITHUB_WORKSPACE/public" --attest

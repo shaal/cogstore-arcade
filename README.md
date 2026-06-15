@@ -3,9 +3,11 @@
 A **games cog store for Cognitum**, served at **https://arcade.shaal.dev**.
 
 Built and signed with [gearbox](https://github.com/shaal/gearbox) (the cog-store protocol +
-tooling). This repo holds the store's **curation** (which cogs/versions it offers) and its
-**publish pipeline**; the cogs themselves are developed upstream in
-[`cognitum-one/cogs`](https://github.com/cognitum-one/cogs).
+tooling). This store is **fully self-contained**: the DOOM cog's source is vendored here under
+`cog/doom/`, so the store builds, signs, and serves it with **no dependency on any other repo**
+(the only external fetch is the FreeDoom IWAD from FreeDoom's own release, sha256-pinned). The
+upstream cog lives in [`cognitum-one/cogs`](https://github.com/cognitum-one/cogs) (PR #28), but
+this store does not depend on it being accepted.
 
 | | |
 |---|---|
@@ -16,9 +18,11 @@ tooling). This repo holds the store's **curation** (which cogs/versions it offer
 
 ## What's here
 
-- `manifests/doom/cog.toml` — the curated DOOM cog manifest (mirrors `cognitum-one/cogs#28`).
-- `.github/workflows/publish.yml` — on every push: build the ARM binary, fetch FreeDoom, sign the
-  store with gearbox, and deploy to GitHub Pages.
+- `cog/doom/` — the **vendored DOOM cog source** (`cog.toml` + Rust/C engine + assets + GPLv2
+  `LICENSE`/`NOTICE`). This is both the build source and the catalog input — the single source of
+  truth for what the store offers.
+- `.github/workflows/publish.yml` — on every push: build the ARM binary from `cog/doom/`, fetch
+  FreeDoom, sign the store with gearbox, and deploy to GitHub Pages.
 
 ## One-time setup (these are yours to do)
 
@@ -43,7 +47,7 @@ examples/publish-store.sh \
   --store-id shaal-arcade --name "Shaal Arcade — games for Cognitum" \
   --base-url https://arcade.shaal.dev --key-id shaal-arcade-2026 \
   --seed-file ./arcade-signing.key \
-  --cogs-dir ./manifests --artifacts-dir ./staged \
+  --cogs-dir ./cog --artifacts-dir ./staged \
   --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --out ./public --attest
 # then upload ./public/ to your host
 ```
