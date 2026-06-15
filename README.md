@@ -3,11 +3,11 @@
 A **games cog store for Cognitum**, served at **https://arcade.shaal.dev**.
 
 Built and signed with [gearbox](https://github.com/shaal/gearbox) (the cog-store protocol +
-tooling). This store is **fully self-contained**: the DOOM cog's source is vendored here under
-`cog/doom/`, so the store builds, signs, and serves it with **no dependency on any other repo**
-(the only external fetch is the FreeDoom IWAD from FreeDoom's own release, sha256-pinned). The
-upstream cog lives in [`cognitum-one/cogs`](https://github.com/cognitum-one/cogs) (PR #28), but
-this store does not depend on it being accepted.
+tooling). This repo is **just curation + the publish pipeline** — it pins a release of the cog
+and signs/hosts it. The cog itself is an independent unit in
+[`shaal/cog-doom`](https://github.com/shaal/cog-doom), whose CI cross-builds `cog-doom-arm` and
+publishes it as a GitHub Release; this store **downloads** that release (it does not build it).
+None of this depends on the upstream PR (`cognitum-one/cogs#28`) being accepted.
 
 | | |
 |---|---|
@@ -18,11 +18,17 @@ this store does not depend on it being accepted.
 
 ## What's here
 
-- `cog/doom/` — the **vendored DOOM cog source** (`cog.toml` + Rust/C engine + assets + GPLv2
-  `LICENSE`/`NOTICE`). This is both the build source and the catalog input — the single source of
-  truth for what the store offers.
-- `.github/workflows/publish.yml` — on every push: build the ARM binary from `cog/doom/`, fetch
-  FreeDoom, sign the store with gearbox, and deploy to GitHub Pages.
+- `.github/workflows/publish.yml` — on every push it downloads the pinned `shaal/cog-doom`
+  release (`cog-doom-arm` + `cog.toml`), fetches the FreeDoom WAD, signs the store with gearbox,
+  and deploys to GitHub Pages. **The pin is the curation knob:** the `COG_DOOM_VERSION` at the top
+  of the workflow chooses which cog release the store offers.
+- That's it — no cog source lives here (it's in `shaal/cog-doom`).
+
+## Offer a newer cog version
+
+1. Cut a new release in `shaal/cog-doom` (`git tag v0.2.0 && git push --tags`).
+2. Bump `COG_DOOM_VERSION` in `.github/workflows/publish.yml` to `v0.2.0` and push. The store
+   re-signs + redeploys with the new binary.
 
 ## One-time setup (these are yours to do)
 
@@ -42,21 +48,29 @@ this store does not depend on it being accepted.
 ## Publish from your laptop instead
 
 ```sh
-# in a gearbox checkout, with the ARM binary + freedoom1.wad staged under ./staged/cogs/arm/…
+# 1. pull the pinned cog release (binary + manifest)
+mkdir -p manifests/doom staged/cogs/arm/wads
+gh release download v0.1.0 --repo shaal/cog-doom --pattern cog-doom-arm --pattern cog.toml --dir /tmp/cd
+cp /tmp/cd/cog.toml manifests/doom/cog.toml
+cp /tmp/cd/cog-doom-arm staged/cogs/arm/cog-doom-arm
+# 2. fetch the FreeDoom WAD (sha256-checked by publish-store.sh)
+curl -L https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip -o fd.zip
+unzip -j fd.zip '*/freedoom1.wad' -d staged/cogs/arm/wads
+# 3. sign + stage (from a gearbox checkout)
 examples/publish-store.sh \
   --store-id shaal-arcade --name "Shaal Arcade — games for Cognitum" \
   --base-url https://arcade.shaal.dev --key-id shaal-arcade-2026 \
   --seed-file ./arcade-signing.key \
-  --cogs-dir ./cog --artifacts-dir ./staged \
+  --cogs-dir ./manifests --artifacts-dir ./staged \
   --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --out ./public --attest
 # then upload ./public/ to your host
 ```
 
 ## Notes
 
-- **Licensing:** the DOOM cog binary is **GPL-2.0** (vendored `doomgeneric`); the FreeDoom IWAD is
-  BSD-3-Clause. GPLv2 compliance is satisfied in-repo — the **corresponding source ships right
-  here** under `cog/doom/` (with its `LICENSE`/`NOTICE`).
+- **Licensing:** the DOOM cog binary is **GPL-2.0** (`doomgeneric`); the FreeDoom IWAD is
+  BSD-3-Clause. The corresponding source is [`shaal/cog-doom`](https://github.com/shaal/cog-doom)
+  (with its `LICENSE`/`NOTICE`) — link it from your store page to satisfy GPLv2's offer-of-source.
 - **Install support:** this produces a valid, signed, verifiable store. A Cognitum **Seed** can
   *install* from it once the device runtime supports custom stores (configurable
   `StoreDescriptor` + `https://` fetch + catalog verify — gearbox protocol §2/§4).

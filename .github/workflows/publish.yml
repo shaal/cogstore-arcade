@@ -5,6 +5,9 @@ on:
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: true }
 
+env:
+  COG_DOOM_VERSION: v0.1.0   # ← pin. Bump to offer a newer shaal/cog-doom release.
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -31,18 +34,20 @@ jobs:
           cargo build --release --manifest-path /tmp/gearbox/crates/gearbox/Cargo.toml
           echo "GEARBOX=/tmp/gearbox/crates/gearbox/target/release/gearbox" >> "$GITHUB_ENV"
 
-      - name: Build the doom ARM binary (vendored source — fully self-contained)
+      - name: Download cog-doom @ pinned release (binary + manifest)
+        env:
+          GH_TOKEN: "${{ github.token }}"
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/staged/cogs/arm/wads"
-          docker build -t cog-doom-arm -f cog/doom/Dockerfile cog/doom
-          cid=$(docker create cog-doom-arm)
-          docker cp "$cid:/cog-doom-arm" "$GITHUB_WORKSPACE/staged/cogs/arm/cog-doom-arm"   # FROM scratch image: binary is at /cog-doom-arm
-          docker rm "$cid"
+          mkdir -p manifests/doom staged/cogs/arm/wads
+          gh release download "$COG_DOOM_VERSION" --repo shaal/cog-doom \
+            --pattern cog-doom-arm --pattern cog.toml --dir /tmp/cogdoom
+          install -m 644 /tmp/cogdoom/cog.toml      manifests/doom/cog.toml
+          install -m 755 /tmp/cogdoom/cog-doom-arm  staged/cogs/arm/cog-doom-arm
 
       - name: Fetch FreeDoom WAD (the cog ships no game data)
         run: |
           curl -L -o fd.zip https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip
-          unzip -j fd.zip '*/freedoom1.wad' -d "$GITHUB_WORKSPACE/staged/cogs/arm/wads"
+          unzip -j fd.zip '*/freedoom1.wad' -d staged/cogs/arm/wads
 
       - name: Sign + stage the store
         env:
@@ -53,7 +58,7 @@ jobs:
             --store-id shaal-arcade --name "Shaal Arcade — games for Cognitum" \
             --base-url https://arcade.shaal.dev --key-id shaal-arcade-2026 \
             --seed-file "$RUNNER_TEMP/key.hex" \
-            --cogs-dir "$GITHUB_WORKSPACE/cog" \
+            --cogs-dir "$GITHUB_WORKSPACE/manifests" \
             --artifacts-dir "$GITHUB_WORKSPACE/staged" \
             --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --out "$GITHUB_WORKSPACE/public" --attest
