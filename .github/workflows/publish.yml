@@ -64,8 +64,9 @@ jobs:
             --out "$GITHUB_WORKSPACE/public" --attest
           rm -f "$RUNNER_TEMP/key.hex"
           echo arcade.shaal.dev > "$GITHUB_WORKSPACE/public/CNAME"
-          # human-facing storefront (renders store.json + app-registry.json client-side)
+          # human-facing storefront (renders store.json + app-registry.json client-side) + covers
           cp "$GITHUB_WORKSPACE/index.html" "$GITHUB_WORKSPACE/public/index.html"
+          cp -R "$GITHUB_WORKSPACE/covers" "$GITHUB_WORKSPACE/public/covers"
 
       - uses: actions/upload-pages-artifact@v3
         with: { path: public }
