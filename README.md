@@ -55,7 +55,8 @@ examples/publish-store.sh \
 ## Notes
 
 - **Licensing:** the DOOM cog binary is **GPL-2.0** (vendored `doomgeneric`); the FreeDoom IWAD is
-  BSD-3-Clause. Hosting both is fine — corresponding source is `cognitum-one/cogs#28`.
+  BSD-3-Clause. GPLv2 compliance is satisfied in-repo — the **corresponding source ships right
+  here** under `cog/doom/` (with its `LICENSE`/`NOTICE`).
 - **Install support:** this produces a valid, signed, verifiable store. A Cognitum **Seed** can
   *install* from it once the device runtime supports custom stores (configurable
   `StoreDescriptor` + `https://` fetch + catalog verify — gearbox protocol §2/§4).
